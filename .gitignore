@@ -3,3 +3,10 @@ token.json
 .env
 __pycache__/
 
+
+# secrets
+client_secret*.json
+token*.json
+credentials*.json
+.env
+
