@@ -10,3 +10,10 @@ token*.json
 credentials*.json
 .env
 
+# База данных
+data/orders.db
+
+# Ключи Google
+*.json
+
+
