@@ -178,7 +178,7 @@ def neural_response(plain_text: str, subject: str = "", sender_name: str = "", c
         r = requests.post(
             "http://localhost:11434/api/generate",
             json={"model": "gemma3:12b-it-q4_K_M", "prompt": prompt, "stream": False},
-            timeout=30,
+            timeout=120,
         )
         text = r.json().get("response", "").strip()
         return text if text else "Спасибо! Получили ваше письмо. Подскажите номер заказа — проверим статус и ответим по сути."

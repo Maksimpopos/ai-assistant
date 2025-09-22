@@ -1,42 +1,60 @@
 # resolver.py
-import re
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from db import SessionLocal, Customer, Order, OrderItem, Shipment
 
-# какие номера считаем «похожими на номер заказа»
-ORDER_PATTERNS = [r"#(\d{4,10})", r"\bORD[-\s_]?(\d{3,12})\b"]
+def get_order_context(sender_email: str, subject: str, body: str):
+    """
+    Пытается найти заказ либо по email клиента, либо по номеру заказа в теме/тексте.
+    Возвращает dict с данными или None.
+    """
+    session = SessionLocal()
+    try:
+        # 1) пробуем вытащить номер заказа из темы/текста
+        import re
+        m = re.search(r"\b\d{5,}\b", subject + " " + body)
+        order_no = m.group(0) if m else None
 
-def extract_order_no(text: str) -> str | None:
-    for pat in ORDER_PATTERNS:
-        m = re.search(pat, text or "", flags=re.IGNORECASE)
-        if m:
-            return m.group(1)
-    return None
-
-def get_order_context(sender_email: str, subject: str, body: str) -> dict | None:
-    order_no = extract_order_no(f"{subject}\n{body}")
-    with SessionLocal() as s:
+        q = None
         if order_no:
-            order = s.execute(select(Order).where(Order.external_order_no==order_no)).scalar_one_or_none()
+            q = select(Order).where(Order.external_order_no == order_no)
         else:
-            cust = s.execute(select(Customer).where(Customer.email==(sender_email or "").strip().lower())).scalar_one_or_none()
-            if not cust:
-                return None
-            order = s.execute(
-                select(Order).where(Order.customer_id==cust.id).order_by(desc(Order.created_at))
-            ).scalars().first()
+            # ищем по email клиента
+            q = (
+                select(Order)
+                .join(Customer, Order.customer_id == Customer.id)
+                .where(Customer.email == sender_email)
+            )
 
+        order = session.execute(q).scalars().first()
         if not order:
             return None
 
-        items = s.execute(select(OrderItem).where(OrderItem.order_id==order.id)).scalars().all()
-        ship  = s.execute(select(Shipment).where(Shipment.order_id==order.id)).scalars().first()
+        # подтянем customer
+        customer = order.customer
+
+        # подтянем items
+        items = session.execute(
+            select(OrderItem).where(OrderItem.order_id == order.id)
+        ).scalars().all()
+
+        # подтянем shipment
+        shipment = session.execute(
+            select(Shipment).where(Shipment.order_id == order.id)
+        ).scalars().first()
 
         return {
             "order_no": order.external_order_no,
             "status": order.status,
-            "created_at": order.created_at,
-            "items": [{"sku": i.sku, "title": i.title, "qty": i.qty} for i in items],
-            "shipment": ({"carrier": ship.carrier, "tracking_no": ship.tracking_no,
-                          "last_event": ship.last_event, "eta_date": ship.eta_date} if ship else None)
+            "created_at": order.created_at.strftime("%Y-%m-%d %H:%M"),
+            "customer": {"name": customer.name, "email": customer.email},
+            "items": [{"sku": it.sku, "title": it.title, "qty": it.qty, "price": it.price} for it in items],
+            "shipment": {
+                "carrier": shipment.carrier,
+                "tracking_no": shipment.tracking_no,
+                "last_event": shipment.last_event,
+                "eta_date": shipment.eta_date,
+            } if shipment else None,
         }
+    finally:
+        session.close()
+

@@ -1,14 +1,10 @@
-import os
-from db import Base, engine, SessionLocal, Customer, Order, OrderItem, Shipment
 from datetime import datetime
+from db import Base, engine, SessionLocal, Customer, Order, OrderItem, Shipment
 
-# создаём папку data если её нет
-os.makedirs("data", exist_ok=True)
-
-# создаём таблицы
+# 1) Создаём таблицы (если их ещё нет)
 Base.metadata.create_all(bind=engine)
 
-# открываем сессию
+# 2) Наполняем тестовыми данными
 db = SessionLocal()
 
 orders_data = [
@@ -58,23 +54,27 @@ orders_data = [
     },
 ]
 
-for data in orders_data:
-    cust = Customer(**data["cust"])
-    db.add(cust)
-    db.commit()
-    db.refresh(cust)
+def seed():
+    for data in orders_data:
+        cust = Customer(**data["cust"])
+        db.add(cust)
+        db.commit()
+        db.refresh(cust)
 
-    order = Order(customer_id=cust.id, **data["order"])
-    db.add(order)
-    db.commit()
-    db.refresh(order)
+        order = Order(customer_id=cust.id, **data["order"])
+        db.add(order)
+        db.commit()
+        db.refresh(order)
 
-    items = [OrderItem(order_id=order.id, **item) for item in data["items"]]
-    db.add_all(items)
-    db.commit()
+        items = [OrderItem(order_id=order.id, **item) for item in data["items"]]
+        db.add_all(items)
+        db.commit()
 
-    ship = Shipment(order_id=order.id, **data["shipment"])
-    db.add(ship)
-    db.commit()
+        ship = Shipment(order_id=order.id, **data["shipment"])
+        db.add(ship)
+        db.commit()
 
-print("✅ База данных создана и заполнена 5 тестовыми заказами!")
+if __name__ == "__main__":
+    seed()
+    print("✅ MySQL-база и таблицы готовы, добавлено 5 заказов.")
+
