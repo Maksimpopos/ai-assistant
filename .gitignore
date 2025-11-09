@@ -11,9 +11,9 @@ credentials*.json
 .env
 
 # База данных
-data/orders.db
+*.db
 
 # Ключи Google
 *.json
 
-
+packages.microsoft.gpg
